@@ -1,26 +1,33 @@
 package com.assetco.hotspots.optimization;
 
-import com.assetco.search.results.Asset;
-import com.assetco.search.results.AssetVendor;
-import com.assetco.search.results.AssetVendorRelationshipLevel;
-import com.assetco.search.results.HotspotKey;
-import static com.assetco.search.results.HotspotKey.Showcase;
+
+import com.assetco.search.results.*;
 import org.junit.jupiter.api.*;
+import java.math.*;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import static com.assetco.search.results.AssetVendorRelationshipLevel.*;
+import static com.assetco.search.results.HotspotKey.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 
-class BugsTest {
+public class BugsTest {
+    private SearchResults searchResults;
+
+
+    @BeforeEach
+    public void setup() {
+        searchResults = new SearchResults();
+    }
+
+
     @Test
     public void precedingPartnerWithLongTrailingAssetsDoesNotWin() {
-        AssetVendor partnerVendor = makeVendor(AssetVendorRelationshipLevel.Partner);
-        Asset missing = givenAssetInResultsWithVendor(partnerVendor);
-
-        AssetVendor otherVendor = makeVendor(AssetVendorRelationshipLevel.Partner);
-        Asset disruptingAsset = givenAssetInResultsWithVendor(otherVendor);
-
-        List<Asset> expected = getExpectedAssets(partnerVendor);
+        final var partnerVendor = makeVendor(Partner);
+        final int maximumShowcaseItems = 5;
+        var missing = givenAssetInResultsWithVendor(partnerVendor);
+        givenAssetInResultsWithVendor(makeVendor(Partner));
+        var expected = givenAssetsInResultsWithVendor(maximumShowcaseItems - 1, partnerVendor);
 
         whenOptimize();
 
@@ -29,36 +36,62 @@ class BugsTest {
     }
 
 
-    private void thenHotspotHasExactly(HotspotKey key, List<Asset> expected) {
+    private AssetVendor makeVendor(AssetVendorRelationshipLevel relationshipLevel) {
+        return new AssetVendor("", "", relationshipLevel, 1.2f);
     }
 
 
-    private void thenHotspotDoesNotHave(HotspotKey key, Asset... missing) {
+    private Asset givenAssetInResultsWithVendor(AssetVendor vendor) {
+        Asset asset = getAsset(vendor);
+        searchResults.addFound(asset);
+
+        return asset;
+    }
+
+
+    private Asset getAsset(AssetVendor vendor) {
+        AssetPurchaseInfo purchaseInfoLast30Days = getPurchaseInfo();
+        AssetPurchaseInfo purchaseInfoLast24Hours = getPurchaseInfo();
+        List<AssetTopic> topics = new ArrayList<>();
+
+        return new Asset("", "", null, null, purchaseInfoLast30Days, purchaseInfoLast24Hours, topics, vendor);
+    }
+
+
+    private AssetPurchaseInfo getPurchaseInfo() {
+        return new AssetPurchaseInfo(5, 3, new Money(BigDecimal.TEN), new Money(BigDecimal.ONE));
+    }
+
+
+    private ArrayList<Asset> givenAssetsInResultsWithVendor(int count, AssetVendor vendor) {
+        var result = new ArrayList<Asset>();
+        for (var i = 0; i < count; ++i) {
+            result.add(givenAssetInResultsWithVendor(vendor));
+        }
+
+        return result;
     }
 
 
     private void whenOptimize() {
+        SearchResultHotspotOptimizer optimizer = new SearchResultHotspotOptimizer();
+        optimizer.optimize(searchResults);
     }
 
 
-    private List<Asset> getExpectedAssets(AssetVendor partnerVendor) {
-        List<Asset> assets = new ArrayList<>();
-        assets.add( givenAssetInResultsWithVendor(partnerVendor) );
-        assets.add( givenAssetInResultsWithVendor(partnerVendor) );
-        assets.add( givenAssetInResultsWithVendor(partnerVendor) );
-        assets.add( givenAssetInResultsWithVendor(partnerVendor) );
-        
-        return assets;
+    private void thenHotspotDoesNotHave(HotspotKey key, Asset... forbidden) {
+        Hotspot hotspot = searchResults.getHotspot(key);
+
+        for(Asset asset : forbidden) {
+            assertFalse(hotspot.getMembers().contains(asset));
+        }
     }
 
 
-    private Asset givenAssetInResultsWithVendor(AssetVendor partnerVendor) {
-        return null;
+    private void thenHotspotHasExactly(HotspotKey hotspotKey, List<Asset> expected) {
+        Hotspot hotspot = searchResults.getHotspot(hotspotKey);
+        List<Asset> hotSpotAssets = hotspot.getMembers();
+
+        assertEquals( hotSpotAssets, expected );
     }
-
-
-    private AssetVendor makeVendor(AssetVendorRelationshipLevel level) {
-        return null;
-    }
-
 }
