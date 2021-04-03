@@ -13,8 +13,8 @@ class RelationshipBasedOptimizer {
     public void optimize(SearchResults searchResults) {
         Iterator<Asset> iterator = searchResults.getFound().iterator();
         var showcaseFull = searchResults.getHotspot(Showcase).getMembers().size() > 0;
-        var showcaseAssets = new ArrayList<Asset>();
-        var partnerAssets = new ArrayList<Asset>();
+        List<Asset> showcaseAssets = new ArrayList<>();
+        List<Asset> partnerAssets = new ArrayList<>();
         var goldAssets = new ArrayList<Asset>();
         var silverAssets = new ArrayList<Asset>();
 
@@ -26,28 +26,35 @@ class RelationshipBasedOptimizer {
             else if (asset.getVendor().getRelationshipLevel() == Silver)
                 silverAssets.add(asset);
 
-            if (asset.getVendor().getRelationshipLevel() != Partner)
-                continue;
+            if (asset.getVendor().getRelationshipLevel() == Partner)
+                // remember this partner asset
+                partnerAssets.add(asset);
+        }
 
-            // remember this partner asset
-            partnerAssets.add(asset);
+        List<AssetVendor> partners = getPartners(partnerAssets);
+        for(AssetVendor partner : partners) {
+            List<Asset> potentialShowCaseAssets = getAssetsForPartner(partner, partnerAssets);
 
-            // too many assets in showcase - put in top picks instead...
-            if (showcaseAssets.size() >= 5) {
-                if (Objects.equals(showcaseAssets.get(0).getVendor(), asset.getVendor()))
-                    searchResults.getHotspot(TopPicks).addMember(asset);
-            } else {
-                // if there are already assets from a different vendor but not enough to hold showcase,
-                // clear showcase
-                if (showcaseAssets.size() != 0)
-                    if (!Objects.equals(showcaseAssets.get(0).getVendor(), asset.getVendor()))
-                        if (showcaseAssets.size() < 3)
-                            showcaseAssets.clear();
+            // If there's enough to fill the showcase, we're done looking
+            if(potentialShowCaseAssets.size() >= 5) {
+                showcaseAssets = potentialShowCaseAssets;
+                break;
+            }
 
-                // add this asset to an empty showcase or showcase with same vendor in it
-                // if there's already another vendor, that vendor should take precedence!
-                if (showcaseAssets.size() == 0 || Objects.equals(showcaseAssets.get(0).getVendor(), asset.getVendor()))
-                    showcaseAssets.add(asset);
+            // If the current list is greater than the
+            if(potentialShowCaseAssets.size() > showcaseAssets.size()) {
+                showcaseAssets = potentialShowCaseAssets;
+            }
+        }
+
+        // if there are too many assets in showcaseAssets - put the extras top picks instead...
+        if (showcaseAssets.size() >= 5) {
+            for (int index = 5; index < showcaseAssets.size(); index++) {
+                searchResults.getHotspot(TopPicks).addMember(showcaseAssets.get(index));
+            }
+
+            while (showcaseAssets.size() > 5) {
+                showcaseAssets.remove(showcaseAssets.size()-1);
             }
         }
 
@@ -81,4 +88,35 @@ class RelationshipBasedOptimizer {
         for (var asset : silverAssets)
             searchResults.getHotspot(Fold).addMember(asset);
     }
+
+    // Get a list of the partners in the order they appear in the assets list.
+    private List<AssetVendor> getPartners(List<Asset> partnerAssets) {
+        List<AssetVendor> partners = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
+
+        for(Asset partnerAsset : partnerAssets) {
+            AssetVendor partner = partnerAsset.getVendor();
+            if( !ids.contains( partnerAsset.getId()) ) {
+                ids.add(partner.getId());
+                partners.add(partner);
+            }
+        }
+
+        return partners;
+    }
+
+
+    // Return a list of the Assets for the specified :Partner
+    private List<Asset> getAssetsForPartner(AssetVendor partner, List<Asset> assets) {
+        List<Asset> partnerAssets = new ArrayList<>();
+
+        for(Asset asset : assets) {
+            if (asset.getVendor().getId().equals(partner.getId()) ) {
+                partnerAssets.add(asset);
+            }
+        }
+
+        return partnerAssets;
+    }
+
 }

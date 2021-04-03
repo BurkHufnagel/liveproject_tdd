@@ -32,5 +32,4 @@ public class AssetVendor {
     public float getRoyaltyRate() {
         return royaltyRate;
     }
-
 }
